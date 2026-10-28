@@ -15,17 +15,26 @@ Chaque valeur précise où elle a été prise : **banc de test** ou **flotte ré
 | Taille de l'image API | — | 242 MB (mesuré le 28/10) | Image en une seule étape |
 | Taille de l'image stats | — | 244 MB (mesuré le 28/10) | Image en deux étapes dès sa création |
 | Durée entre le push et le dernier carré à jour | à mesurer | à mesurer | Nécessite le job de déploiement |
-| Coups encaissés par pulse, avec un exemplaire | à mesurer | | |
-| Coups encaissés par pulse, avec trois exemplaires (`--scale api=3`) | à mesurer | | La base n'est pas dupliquée : on s'attend à moins de trois fois plus |
-| Nombre de coups avant que le carré ne pâlisse | à mesurer | | |
-| Temps de retour à un carré plein après une salve de 1 000 coups | à mesurer | | |
+| Coups encaissés par pulse, avec un exemplaire | — | 300 au plus (≈ 55 coups/s mesurés sur stats) | Plafond fixé par `pulse.js` (300 coups par pulse), pas par la vitesse du service |
+| Coups encaissés par pulse, avec trois exemplaires (`--scale stats=3`) | 3 000 coups en 54,4 s (1 exemplaire) | 3 000 coups en 17,3 s (3 exemplaires) | 3,1 fois plus vite : chaque exemplaire a son propre pulse. La base n'a pas freiné à cette charge |
+| Nombre de coups avant que le carré ne pâlisse | — | dès qu'un service reçoit plus de ≈ 60 coups/s par exemplaire | Au-delà, le retard grossit : chaque pulse n'en encaisse que 300. Le tableau pâlit au-delà de 40 coups en retard |
+| Temps de retour à un carré plein après une salve de 1 000 coups | 20,7 s (stats, 1 exemplaire) ; 19,2 s (front) | 9,3 s (stats, 3 exemplaires) | Trois pulses en parallèle au lieu d'un |
 
 Tailles relevées avec `docker images` (Docker Desktop) sur des images construites depuis `main`.
 
-### Ce qui a déjà été observé sur le banc
+### Comment ces chiffres ont été obtenus, et leurs limites
 
-- Service stats, 300 coups sur `/travail` : tous réussis, 296 en moins de 25 ms (seaux de
-  l'histogramme). Le banc ne remplace pas la mesure sur la flotte réelle.
+Mesures du 28/10 sur le vrai `compose.prod.yml` monté en local (vrais front, API et base), avec le
+service stats et un **faux tableau** ajoutés hors dépôt. Les salves sont envoyées au faux tableau,
+qui en transmet au plus 300 par pulse ; de toute façon, `pulse.js` n'en encaisse jamais plus de 300
+par pulse, quel que soit le tableau.
+
+- `/travail` répond vite : p95 de **9,1 ms** pour stats (une requête en base) et **4,8 ms** pour le
+  front (qui ne fait rien). Le service n'est jamais le goulot : c'est le pulse.
+- Le front ne peut pas être dupliqué tel quel : il publie un port fixe (3003), et deux conteneurs ne
+  peuvent pas écouter sur le même port de la machine.
+- **À refaire avec le vrai tableau de la classe** : son comportement exact avec plusieurs exemplaires
+  d'un même service n'est pas connu.
 
 ## Le dernier relevé : combien coûte une livraison ?
 
