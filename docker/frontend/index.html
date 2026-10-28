@@ -85,8 +85,11 @@
     </div>
 
     <script>
-        // Liste des questions du quiz
-        const questions = [
+        // Adresse de l'API (modifiable avant ce script via window.QUIZBATTLE_API_URL)
+        const API_URL = window.QUIZBATTLE_API_URL || "http://localhost:3002";
+
+        // Questions de secours, utilisées si l'API ne répond pas
+        const questionsLocales = [
             {
                 question: "Que signifie HTML ?",
                 reponses: [
@@ -118,6 +121,46 @@
                 correcte: 1
             }
         ];
+
+        // Questions de la partie : remplacées par celles de PostgreSQL si l'API répond
+        let questions = questionsLocales;
+
+        // Charger les questions depuis l'API
+        // Quiz choisi : paramètre ?quiz=ID, sinon le premier quiz qui contient des questions
+        async function chargerQuestions() {
+            try {
+                const options = { signal: AbortSignal.timeout(3000) };
+                let quizId = new URLSearchParams(window.location.search).get("quiz");
+
+                if (!quizId) {
+                    const reponseQuiz = await fetch(API_URL + "/api/quiz", options);
+                    if (!reponseQuiz.ok) throw new Error("HTTP " + reponseQuiz.status);
+
+                    const listeQuiz = await reponseQuiz.json();
+                    const quiz = listeQuiz.find((q) => q.nb_questions > 0);
+                    if (!quiz) throw new Error("aucun quiz avec des questions");
+
+                    quizId = quiz.id;
+                }
+
+                const reponse = await fetch(API_URL + "/api/quiz/" + quizId + "/questions", options);
+                if (!reponse.ok) throw new Error("HTTP " + reponse.status);
+
+                const donnees = await reponse.json();
+                if (donnees.length === 0) throw new Error("quiz sans questions");
+
+                // Adapter le format de l'API au format utilisé par le quiz
+                questions = donnees.map((q) => ({
+                    question: q.enonce,
+                    reponses: q.options.map((option) => option.libelle),
+                    correcte: q.correcte,
+                    duree: q.duree_secondes
+                }));
+            } catch (erreur) {
+                console.warn("Questions de l'API non chargées, questions locales utilisées :", erreur.message);
+                questions = questionsLocales;
+            }
+        }
 
         // Variables permettant de suivre la partie
         let indexQuestion = 0;
@@ -154,8 +197,8 @@
                 document.getElementById("reponses").appendChild(bouton);
             });
 
-            // Réinitialiser le chronomètre
-            temps = 15;
+            // Réinitialiser le chronomètre (durée de la question en base, 15 s par défaut)
+            temps = questionActuelle.duree || 15;
             document.getElementById("temps").textContent = temps;
 
             clearInterval(intervalle);
@@ -230,8 +273,9 @@
             document.getElementById("reponses").appendChild(bouton);
         }
 
-        // Démarrer automatiquement le quiz
-        afficherQuestion();
+        // Démarrer automatiquement le quiz une fois les questions chargées
+        document.getElementById("question").textContent = "Chargement du quiz...";
+        chargerQuestions().then(afficherQuestion);
     </script>
 
 </body>

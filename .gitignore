@@ -1,0 +1,5 @@
+# Sauvegardes PostgreSQL locales (contiennent des données et des hash de mots de passe)
+backups/
+
+# Secrets locaux
+.env
