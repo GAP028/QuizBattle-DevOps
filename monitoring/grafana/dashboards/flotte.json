@@ -14,7 +14,7 @@
       "id": 1,
       "type": "timeseries",
       "title": "1 · Trafic : le service reçoit-il des requêtes ?",
-      "description": "Courbe à plat sur un carré éteint : plus rien n'arrive. Courbe qui monte avant l'extinction : la charge. Les 5xx montrent un service qui répond mais n'arrive plus à travailler.",
+      "description": "Courbe à plat sur un carré éteint : plus rien n'arrive. Courbe qui monte avant l'extinction : la charge. Les 5xx montrent un service qui répond mais n'arrive plus à travailler. Le front nginx n'expose pas de compteur : son activité se lit sur la sonde du panneau 2.",
       "gridPos": { "x": 0, "y": 0, "w": 12, "h": 9 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "targets": [
@@ -62,7 +62,7 @@
       "id": 2,
       "type": "timeseries",
       "title": "2 · Réponse : répond-il, et en combien de temps ?",
-      "description": "Latence qui explose avant l'extinction : saturation. Extinction sans montée de latence : autre chose. Les instances comptent les exemplaires que Prometheus joint vraiment.",
+      "description": "Latence qui explose avant l'extinction : saturation. Extinction sans montée de latence : autre chose. Les instances comptent les exemplaires que Prometheus joint vraiment. Le front est mesuré par une sonde externe (blackbox), comme un navigateur.",
       "gridPos": { "x": 12, "y": 0, "w": 12, "h": 9 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "targets": [
@@ -75,8 +75,20 @@
         {
           "refId": "B",
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "sum by (job) (up{job=~\"front|api|stats\"})",
+          "expr": "sum by (job) (up{job=~\"api|stats\"})",
           "legendFormat": "{{job}} · instances qui répondent"
+        },
+        {
+          "refId": "C",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum by (service) (probe_success{service=\"front\"})",
+          "legendFormat": "{{service}} · instances qui répondent"
+        },
+        {
+          "refId": "D",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "max by (service) (probe_duration_seconds{service=\"front\"})",
+          "legendFormat": "{{service}} · temps de réponse (sonde)"
         }
       ],
       "fieldConfig": {
@@ -108,7 +120,7 @@
       "id": 3,
       "type": "stat",
       "title": "3 · Dépendances : vont-elles bien ?",
-      "description": "Base KO et tableau OK : panne 2 ou 4. Base OK et tableau KO : panne 6, le service va bien mais ne joint plus le tableau de la classe. Pavillon KO : panne 3.",
+      "description": "Base KO et tableau OK : panne 2 ou 4. Base OK et tableau KO : panne 6, le service va bien mais ne joint plus le tableau de la classe. Pavillon KO : panne 3. « répond » KO : le process lui-même est mort ou injoignable (panne 1, 5).",
       "gridPos": { "x": 0, "y": 9, "w": 12, "h": 9 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "targets": [
@@ -129,6 +141,18 @@
           "datasource": { "type": "prometheus", "uid": "prometheus" },
           "expr": "min by (job) (quiz_pavillon_lisible) > -1",
           "legendFormat": "{{job}} → pavillon"
+        },
+        {
+          "refId": "D",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "min by (job) (up{job=~\"api|stats\"})",
+          "legendFormat": "{{job}} → répond"
+        },
+        {
+          "refId": "E",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "min by (service) (probe_success{service=\"front\"})",
+          "legendFormat": "{{service}} → répond (sonde)"
         }
       ],
       "fieldConfig": {
@@ -161,7 +185,7 @@
       "id": 4,
       "type": "table",
       "title": "4 · Version : celle qui tourne est-elle celle qu'on croit ?",
-      "description": "Une ligne par service et par version. Un service qui manque, ou une version différente des autres après un push : panne 5 ou livraison incomplète.",
+      "description": "Une ligne par service et par version. Un service qui manque, ou une version différente des autres après un push : panne 5 ou livraison incomplète. Le front nginx n'expose pas sa version : seuls api et stats apparaissent ici.",
       "gridPos": { "x": 12, "y": 9, "w": 12, "h": 9 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "targets": [
