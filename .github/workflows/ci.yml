@@ -3,11 +3,15 @@
 # Responsable : Alain-Patrick Gomas
 # ==========================================================
 
+# Nom du pipeline dans GitHub Actions
 name: QuizBattle CI/CD
 
-# Déclenchement automatique du pipeline
+# Déclenchement automatique
 on:
+  # À chaque push sur GitHub
   push:
+
+  # Lorsqu'une Pull Request cible main
   pull_request:
     branches:
       - main
@@ -16,43 +20,48 @@ on:
 permissions:
   contents: read
 
+# ==========================================================
+# TÂCHES DU PIPELINE
+# ==========================================================
 jobs:
 
   # ========================================================
-  # TÂCHE 1 : TESTER L'APPLICATION
+  # TÂCHE 1 : VÉRIFIER L'APPLICATION
   # ========================================================
   test:
     runs-on: ubuntu-latest
 
     steps:
 
-      # Récupérer le code source
+      # Récupérer le code du dépôt GitHub
       - name: Récupérer le code source
         uses: actions/checkout@v5
 
-      # Installer Node.js 22
+      # Installer Node.js
       - name: Installer Node.js
         uses: actions/setup-node@v5
         with:
           node-version: '22'
 
-      # Vérifier la présence du frontend
+      # Vérifier que le fichier HTML existe
       - name: Vérifier le fichier HTML
         run: |
           test -f index.html
 
-      # Vérifier la structure minimale de QuizBattle
+      # Vérifier la structure minimale du quiz
       - name: Vérifier la structure du quiz
         run: |
           node -e "const fs = require('fs'); const html = fs.readFileSync('index.html', 'utf8'); if (!html.includes('QuizBattle') || !html.includes('<html')) { process.exit(1); } console.log('Structure QuizBattle détectée');"
 
   # ========================================================
-  # TÂCHE 2 : CONSTRUIRE ET PUBLIER LES IMAGES DOCKER
+  # TÂCHE 2 : CONSTRUIRE LES IMAGES DOCKER
   # ========================================================
   build:
-    # La construction démarre uniquement si les tests réussissent
+
+    # Le build ne démarre que si les tests réussissent
     needs: test
 
+    # Machine Ubuntu fournie par GitHub
     runs-on: ubuntu-latest
 
     steps:
@@ -61,26 +70,39 @@ jobs:
       - name: Récupérer le code source
         uses: actions/checkout@v5
 
-      # Construire l'image Docker du frontend
-      # -f indique l'emplacement du Dockerfile
-      # Le point final utilise la racine du projet comme contexte
+      # ====================================================
+      # CONSTRUCTION DU FRONTEND
+      # ====================================================
+
+      # -t : nom de l'image Docker
+      # -f : chemin vers le Dockerfile
+      # .  : racine du projet comme contexte de construction
       - name: Construire l'image frontend
         run: docker build -t quizbattle-front:test -f docker/frontend/Dockerfile .
 
-      # Construire l'image Docker de l'API
-      - name: Construire l'image API
-        run: docker build -t quizbattle-api:test ./api
+      # ====================================================
+      # CONSTRUCTION DE L'API
+      # ====================================================
 
-      # Vérifier les images construites
+      # CORRECTION :
+      # L'API utilise également la racine du projet
+      # pour accéder aux fichiers api/ dans ses COPY.
+      - name: Construire l'image API
+        run: docker build -t quizbattle-api:test -f api/Dockerfile .
+
+      # ====================================================
+      # VÉRIFICATION DES IMAGES
+      # ====================================================
+
       - name: Afficher les images Docker
         run: docker images
 
       # ====================================================
-      # PUBLICATION AUTOMATIQUE SUR DOCKER HUB
+      # CONNEXION À DOCKER HUB
       # ====================================================
 
       # Connexion uniquement après un push sur main
-      # Les Pull Requests ne publient aucune image
+      # Aucune publication depuis une Pull Request
       - name: Connexion à Docker Hub
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: docker/login-action@v3
@@ -88,15 +110,22 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      # Attribuer une version unique aux images
-      # github.sha représente l'identifiant du commit
+      # ====================================================
+      # VERSIONNEMENT DES IMAGES
+      # ====================================================
+
+      # Chaque image reçoit le SHA du commit Git
+      # pour identifier précisément sa version.
       - name: Versionner les images Docker
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
           docker tag quizbattle-front:test gomaso/quizbattle-front:${{ github.sha }}
           docker tag quizbattle-api:test gomaso/quizbattle-api:${{ github.sha }}
 
-      # Publier les images sur Docker Hub
+      # ====================================================
+      # PUBLICATION DES IMAGES SUR DOCKER HUB
+      # ====================================================
+
       - name: Publier les images Docker
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
