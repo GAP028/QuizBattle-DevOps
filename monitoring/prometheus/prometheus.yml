@@ -8,10 +8,18 @@ global:
   evaluation_interval: 5s
 
 scrape_configs:
-  # Le front est un nginx statique (docker/frontend) : il n'expose pas /metrics.
-  # On le sonde de l'extérieur avec blackbox, comme un navigateur, exemplaire par
-  # exemplaire. probe_success dit s'il répond, probe_duration_seconds en combien de temps.
-  # Le jour où le front passe sous Node avec metrics.js, ajouter un job comme api.
+  # Les trois services Node embarquent metrics.js : même job, même port, même page.
+  - job_name: front
+    dns_sd_configs:
+      - names: [front]
+        type: A
+        port: 3000
+        refresh_interval: 5s
+
+  # En plus de ses métriques, le front est sondé de l'extérieur par blackbox, comme
+  # un navigateur : la page est-elle servie, et en combien de temps ? C'est ce qui
+  # montre, pendant la panne 6, que l'application répond alors que le carré est éteint.
+  # Chaque sonde est une vraie requête sur le front (rangée sous la route « autre »).
   - job_name: front-sonde
     metrics_path: /probe
     params:
@@ -19,7 +27,7 @@ scrape_configs:
     dns_sd_configs:
       - names: [front]
         type: A
-        port: 80
+        port: 3000
         refresh_interval: 5s
     relabel_configs:
       - source_labels: [__address__]
