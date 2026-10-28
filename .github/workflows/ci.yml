@@ -3,28 +3,32 @@
 # Responsable : Alain-Patrick Gomas
 # ==========================================================
 
-# Nom affiché dans GitHub Actions
+# Nom du workflow affiché sur GitHub Actions
 name: QuizBattle CI
 
-# Événements déclenchant automatiquement le workflow
+# Événements qui déclenchent automatiquement le pipeline
 on:
 
   # Lorsqu'un développeur envoie du code sur GitHub
   push:
 
-  # Lorsqu'une Pull Request vise la branche main
+  # Lorsqu'une Pull Request cible la branche principale
   pull_request:
     branches:
       - main
 
-# Permissions minimales du workflow
+# Autorisation minimale : lire le contenu du dépôt
 permissions:
   contents: read
 
-# Liste des tâches à exécuter
+# ==========================================================
+# LISTE DES TÂCHES DU PIPELINE
+# ==========================================================
 jobs:
 
-  # PREMIÈRE TÂCHE : VÉRIFICATION DE L'APPLICATION
+  # ========================================================
+  # TÂCHE 1 : VÉRIFIER L'APPLICATION
+  # ========================================================
   test:
 
     # GitHub fournit temporairement une machine Ubuntu
@@ -32,56 +36,61 @@ jobs:
 
     steps:
 
-      # ÉTAPE 1 : RÉCUPÉRER LE PROJET
-      # Sans cette action, la machine ne possède pas notre code
+      # Étape 1 : récupérer le code source du projet
       - name: Récupérer le code source
         uses: actions/checkout@v5
 
-      # ÉTAPE 2 : INSTALLER NODE.JS
-      # Node.js servira à exécuter notre vérification
+      # Étape 2 : installer Node.js 22
       - name: Installer Node.js
         uses: actions/setup-node@v5
         with:
           node-version: '22'
 
-      # ÉTAPE 3 : VÉRIFIER QUE LE FRONT-END EXISTE
-      # La pipeline échoue si index.html est absent
+      # Étape 3 : vérifier que le fichier HTML existe
       - name: Vérifier le fichier HTML
         run: |
           test -f index.html
 
-      # ÉTAPE 4 : VÉRIFIER LE CONTENU MINIMAL DU QUIZ
-      # Le script vérifie que le fichier contient notre application
+      # Étape 4 : vérifier la structure minimale du quiz
       - name: Vérifier la structure du quiz
         run: |
           node -e "const fs = require('fs'); const html = fs.readFileSync('index.html', 'utf8'); if (!html.includes('QuizBattle') || !html.includes('<html')) { process.exit(1); } console.log('Structure QuizBattle détectée');"
-       
-  # ==========================================================
-  # DEUXIÈME TÂCHE : CONSTRUIRE LES IMAGES DOCKER
-  # ==========================================================
 
+  # ========================================================
+  # TÂCHE 2 : CONSTRUIRE LES IMAGES DOCKER
+  # ========================================================
   build:
 
-    # Le build démarre uniquement si le job test a réussi.
+    # La construction ne démarre que si les tests réussissent
     needs: test
 
-    # GitHub fournit une machine Ubuntu.
+    # Exécution sur une machine Ubuntu fournie par GitHub
     runs-on: ubuntu-latest
 
     steps:
 
-      # Récupérer les fichiers du projet.
+      # Étape 1 : récupérer le code source
       - name: Récupérer le code source
         uses: actions/checkout@v5
 
-      # Construire l'image Docker du frontend.
+      # Étape 2 : construire l'image Docker du frontend
+      #
+      # -t : donne un nom et une version à l'image
+      # -f : indique l'emplacement du Dockerfile
+      # .  : définit la racine du projet comme contexte
+      #
+      # Le contexte racine permet aussi de copier monitoring/lib/
       - name: Construire l'image frontend
-        run: docker build -t quizbattle-front:test ./docker/frontend
+        run: docker build -t quizbattle-front:test -f docker/frontend/Dockerfile .
 
-      # Construire l'image Docker de l'API Node.js.
+      # Étape 3 : construire l'image Docker de l'API Node.js
+      #
+      # Le Dockerfile de l'API est dans le dossier api/
       - name: Construire l'image API
         run: docker build -t quizbattle-api:test ./api
 
-      # Afficher les images construites pour vérification.
+      # Étape 4 : afficher les images construites
+      #
+      # Permet de vérifier leur présence dans les logs GitHub
       - name: Afficher les images Docker
-        run: docker images       
+        run: docker images
