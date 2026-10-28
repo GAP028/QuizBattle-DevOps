@@ -8,12 +8,29 @@ global:
   evaluation_interval: 5s
 
 scrape_configs:
-  - job_name: front
+  # Le front est un nginx statique (docker/frontend) : il n'expose pas /metrics.
+  # On le sonde de l'extérieur avec blackbox, comme un navigateur, exemplaire par
+  # exemplaire. probe_success dit s'il répond, probe_duration_seconds en combien de temps.
+  # Le jour où le front passe sous Node avec metrics.js, ajouter un job comme api.
+  - job_name: front-sonde
+    metrics_path: /probe
+    params:
+      module: [http_2xx]
     dns_sd_configs:
       - names: [front]
         type: A
-        port: 3000
+        port: 80
         refresh_interval: 5s
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+        replacement: http://$1/
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: service
+        replacement: front
+      - target_label: __address__
+        replacement: blackbox:9115
 
   - job_name: api
     dns_sd_configs:

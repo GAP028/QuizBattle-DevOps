@@ -19,6 +19,18 @@ services:
       - mesures:/prometheus
     ports:
       - "9090:9090"
+    depends_on:
+      - blackbox
+
+  # Sonde le front nginx de l'extérieur, puisqu'il n'expose pas de métriques.
+  # Pas de port publié : seul Prometheus l'interroge, sur le réseau interne.
+  blackbox:
+    image: prom/blackbox-exporter:v0.25.0
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/blackbox/blackbox.yml
+    volumes:
+      - ./blackbox/blackbox.yml:/etc/blackbox/blackbox.yml:ro
 
   grafana:
     image: grafana/grafana:11.1.0
