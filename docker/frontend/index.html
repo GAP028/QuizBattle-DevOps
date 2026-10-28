@@ -91,6 +91,9 @@
         // Questions de la partie, chargées uniquement depuis l'API (PostgreSQL)
         let questions = [];
 
+        // Code de la partie en cours, fourni par l'API : il identifie le joueur
+        let codePartie = null;
+
         // Charger les questions depuis l'API
         // Quiz choisi : paramètre ?quiz=ID, sinon le premier quiz qui contient des questions
         async function chargerQuestions() {
@@ -115,21 +118,38 @@
             if (donnees.length === 0) throw new Error("quiz sans questions");
 
             // Adapter le format de l'API au format utilisé par le quiz
+            // (la bonne réponse n'est pas envoyée : c'est l'API qui la vérifie)
             questions = donnees.map((q) => ({
+                id: q.id,
                 question: q.enonce,
                 reponses: q.options.map((option) => option.libelle),
-                correcte: q.correcte,
+                optionIds: q.options.map((option) => option.id),
                 duree: q.duree_secondes
             }));
+
+            return quizId;
         }
 
-        // Charger le quiz puis lancer la partie, ou afficher l'erreur
+        // Créer une partie côté API : chaque réponse y sera enregistrée
+        async function creerPartie(quizId) {
+            const reponse = await fetch(API_URL + "/api/quiz/" + quizId + "/parties", {
+                method: "POST",
+                signal: AbortSignal.timeout(3000)
+            });
+            if (!reponse.ok) throw new Error("HTTP " + reponse.status);
+
+            const partie = await reponse.json();
+            codePartie = partie.code;
+        }
+
+        // Charger le quiz, créer la partie puis la lancer, ou afficher l'erreur
         function demarrer() {
             document.getElementById("question").textContent = "Chargement du quiz...";
             document.getElementById("reponses").innerHTML = "";
             document.getElementById("message").textContent = "";
 
             chargerQuestions()
+                .then(creerPartie)
                 .then(() => {
                     indexQuestion = 0;
                     score = 0;
@@ -139,12 +159,58 @@
                 .catch(afficherErreur);
         }
 
+        // Envoyer la réponse à l'API (optionId null : temps écoulé), puis passer à la suite
+        async function envoyerReponse(optionId) {
+
+            // Ignorer les clics pendant l'envoi
+            if (envoiEnCours) return;
+            envoiEnCours = true;
+
+            clearInterval(intervalle);
+
+            const questionActuelle = questions[indexQuestion];
+
+            try {
+                const reponse = await fetch(API_URL + "/api/parties/" + codePartie + "/reponses", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        question_id: questionActuelle.id,
+                        option_id: optionId,
+                        temps_reponse_ms: Date.now() - debutQuestion
+                    }),
+                    signal: AbortSignal.timeout(3000)
+                });
+                if (!reponse.ok) throw new Error("HTTP " + reponse.status);
+
+                const resultat = await reponse.json();
+
+                // Le score affiché est celui calculé et enregistré par l'API
+                score = resultat.score;
+                document.getElementById("score").textContent = score;
+            } catch (erreur) {
+                envoiEnCours = false;
+                afficherErreur(erreur);
+                return;
+            }
+
+            envoiEnCours = false;
+
+            // Passer à la question suivante
+            indexQuestion++;
+            afficherQuestion();
+        }
+
         // Pas de questions de secours : on indique le problème et on propose de réessayer
         function afficherErreur(erreur) {
-            console.error("Questions de l'API non chargées :", erreur.message);
+            console.error("Échange avec l'API impossible :", erreur.message);
+
+            clearInterval(intervalle);
 
             document.getElementById("question").textContent =
                 "Impossible de charger le quiz";
+
+            document.getElementById("reponses").innerHTML = "";
 
             document.getElementById("message").textContent =
                 "Vérifiez que l'API est démarrée sur " + API_URL + " (" + erreur.message + ")";
@@ -163,6 +229,8 @@
         let score = 0;
         let temps = 15;
         let intervalle;
+        let debutQuestion = 0;
+        let envoiEnCours = false;
 
         // Afficher une question et ses réponses
         function afficherQuestion() {
@@ -196,6 +264,7 @@
             // Réinitialiser le chronomètre (durée de la question en base, 15 s par défaut)
             temps = questionActuelle.duree || 15;
             document.getElementById("temps").textContent = temps;
+            debutQuestion = Date.now();
 
             clearInterval(intervalle);
 
@@ -206,35 +275,17 @@
 
                 document.getElementById("temps").textContent = temps;
 
-                // Passer à la question suivante à zéro
+                // Temps écoulé : la question est enregistrée sans réponse
                 if (temps <= 0) {
-                    clearInterval(intervalle);
-                    indexQuestion++;
-                    afficherQuestion();
+                    envoyerReponse(null);
                 }
 
             }, 1000);
         }
 
-        // Vérifier la réponse sélectionnée
+        // Vérifier la réponse sélectionnée (la vérification est faite par l'API)
         function verifierReponse(index) {
-
-            clearInterval(intervalle);
-
-            const questionActuelle = questions[indexQuestion];
-
-            // Bonne réponse : ajouter un point
-            if (index === questionActuelle.correcte) {
-
-                score++;
-
-                document.getElementById("score").textContent = score;
-
-            }
-
-            // Passer à la question suivante
-            indexQuestion++;
-            afficherQuestion();
+            envoyerReponse(questions[indexQuestion].optionIds[index]);
         }
 
         // Afficher le résultat final
@@ -257,14 +308,8 @@
 
             bouton.textContent = "Recommencer";
 
-            bouton.onclick = () => {
-                indexQuestion = 0;
-                score = 0;
-
-                document.getElementById("score").textContent = score;
-
-                afficherQuestion();
-            };
+            // Une nouvelle partie est créée à chaque fois
+            bouton.onclick = demarrer;
 
             document.getElementById("reponses").appendChild(bouton);
         }
