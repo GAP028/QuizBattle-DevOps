@@ -2,7 +2,10 @@
 # pannes.sh : tire une panne au hasard et l'applique sur la machine cible.
 # À lancer depuis votre poste, la machine cible doit être joignable en SSH.
 # Personne dans l'équipage ne regarde le numéro qui sort, c'est tout l'intérêt.
-# Script fourni par le sujet ; seule adaptation : notre troisième service s'appelle stats.
+# Script fourni par le sujet, adapté à notre flotte :
+#  - notre troisième service s'appelle stats (et non annexe) ;
+#  - notre .env nomme le mot de passe POSTGRES_PASSWORD (et non DB_PASSWORD) : sans
+#    cette adaptation, la panne du secret effacé ne modifiait aucune ligne.
 set -u
 CIBLE="ssh -i deploy_key -p 2222 root@localhost"
 SERVICES=(front api stats)
@@ -13,7 +16,7 @@ case $((RANDOM % 6)) in
   0) $CIBLE "docker kill \$($ID)" ;;
   1) $CIBLE "docker stop \$(docker ps -qf name=db | head -1)" ;;
   2) $CIBLE "docker exec \$($ID) chmod 000 /data" ;;
-  3) $CIBLE "cd /srv/flotte && sed -i 's|^DB_PASSWORD=.*|DB_PASSWORD=|' .env && docker compose up -d api" ;;
+  3) $CIBLE "cd /srv/flotte && sed -i 's|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=|' .env && docker compose up -d api" ;;
   4) $CIBLE "cd /srv/flotte && sed -i 's|^TAG=.*|TAG=nexistepas|' .env && docker compose up -d $VICTIME" ;;
   5) $CIBLE "cd /srv/flotte && sed -i 's|^TABLEAU_URL=.*|TABLEAU_URL=http://127.0.0.1:1|' .env && docker compose up -d $VICTIME" ;;
 esac
