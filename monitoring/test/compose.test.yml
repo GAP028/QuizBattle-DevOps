@@ -13,13 +13,19 @@ x-service: &service
   restart: unless-stopped
 
 services:
-  # Le vrai front de l'équipe (nginx statique, docker/frontend), pas un faux :
-  # c'est lui que la sonde blackbox doit savoir mesurer.
+  # Le vrai front de l'équipe (serveur Node de docker/frontend), pas un faux.
+  # Il se construit depuis la racine du dépôt pour embarquer monitoring/lib.
   front:
     build:
-      context: ../../docker/frontend
+      context: ../..
+      dockerfile: docker/frontend/Dockerfile
     image: banc-front:local
     restart: unless-stopped
+    environment:
+      GROUPE: banc-de-test
+      VERSION: ${TAG:-local}
+      TABLEAU_URL: ${TABLEAU_URL:-http://faux-tableau:3000}
+      URL_INTERNE: http://front:3000
 
   api:
     <<: *service
@@ -29,12 +35,14 @@ services:
       VERSION: ${TAG:-local}
       TABLEAU_URL: ${TABLEAU_URL:-http://faux-tableau:3000}
       URL_INTERNE: http://api:3000
-      DATABASE_URL: postgres://postgres:${DB_PASSWORD:-test}@db:5432/postgres
+      DATABASE_URL: postgres://postgres:${DB_PASSWORD:-test}@db:5432/quizbattle
     volumes:
       - pavillon:/data
     depends_on:
       - db
 
+  # Faux service stats tant que le vrai (branche feature/stats) n'est pas dans main.
+  # Le faux api remplace l'API d'Orokia, qui n'expose pas encore /metrics ni pulse.
   stats:
     <<: *service
     environment:
@@ -51,11 +59,16 @@ services:
     ports:
       - "8088:3000"
 
+  # La base est initialisée avec le vrai schéma et les vraies données de l'équipe.
   db:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
       POSTGRES_PASSWORD: test
+      POSTGRES_DB: quizbattle
+    volumes:
+      - ../../database/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+      - ../../database/seed.sql:/docker-entrypoint-initdb.d/02-seed.sql:ro
 
 volumes:
   pavillon:
