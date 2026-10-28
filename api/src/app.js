@@ -3,8 +3,13 @@ const crypto = require("crypto");
 const express = require("express");
 const cors = require("cors");
 const pool = require("./db");
+const supervision = require("./supervision");
 
 const app = express();
+
+// Avant les routes : chaque requête est comptée et chronométrée (GET /metrics)
+supervision.exposerMetriques(app);
+supervision.surveillerDependance("postgres", () => pool.query("SELECT 1"));
 
 // CORS_ORIGIN permet de restreindre les origines autorisées (par défaut : toutes)
 app.use(cors(process.env.CORS_ORIGIN ? { origin: process.env.CORS_ORIGIN.split(",") } : {}));
@@ -80,6 +85,26 @@ app.get("/api/health", async (req, res) => {
             status: "error",
             message: "Connexion à PostgreSQL impossible",
         });
+    }
+});
+
+// Santé pour la supervision et le healthcheck : 503 si la base ne répond pas
+app.get("/sante", async (req, res) => {
+    try {
+        await pool.query("SELECT 1");
+        res.json({ statut: "ok", service: "api", base: "ok" });
+    } catch {
+        res.status(503).json({ statut: "degrade", service: "api", base: "injoignable" });
+    }
+});
+
+// Route de travail appelée par le pulse : un coup = une vraie lecture en base
+app.get("/travail", async (req, res) => {
+    try {
+        await pool.query("SELECT COUNT(*) FROM question");
+        res.sendStatus(200);
+    } catch {
+        res.sendStatus(503);
     }
 });
 

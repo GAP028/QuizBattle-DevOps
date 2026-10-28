@@ -1,0 +1,14 @@
+# Contexte de construction = racine du dépôt (front, api, stats).
+# Rien de ceci n'est copié par les Dockerfile : on évite juste de l'envoyer au moteur Docker.
+
+# Secrets et sauvegardes locales
+**/.env
+**/.env.*
+!**/.env.example
+backups/
+
+# Dépendances installées sur le poste (les images font leur propre npm ci)
+**/node_modules
+
+# Historique Git
+.git

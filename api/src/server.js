@@ -4,6 +4,7 @@ require("dotenv").config({ quiet: true });
 
 const app = require("./app");
 const pool = require("./db");
+const supervision = require("./supervision");
 
 const PORT = Number(process.env.PORT) || 3000;
 
@@ -16,6 +17,11 @@ const server = app.listen(PORT, (error) => {
     }
 
     console.log(`API QuizBattle disponible sur http://localhost:${PORT}`);
+
+    // Pulse vers le tableau de la classe (signale lui-même une configuration incomplète)
+    if (supervision.active) {
+        supervision.demarrerLePulse();
+    }
 });
 
 // Arrêt propre (docker stop envoie SIGTERM)
