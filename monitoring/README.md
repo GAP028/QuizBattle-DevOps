@@ -12,34 +12,27 @@ Grafana les range dans quatre panneaux qui répondent chacun à une question.
 | --- | --- |
 | `lib/metrics.js` | Métriques à importer dans chaque service : `exposerMetriques(app)`, `surveillerDependance(nom, verifier)` |
 | `lib/pulse.js` | Pulse du sujet, avec un seul ajout : il note chaque succès ou échec d'envoi au tableau |
-| `prometheus/prometheus.yml` | Une cible par service, trouvée par le DNS de Docker : `api` et `stats` sur `/metrics`, `front` par une sonde |
-| `blackbox/blackbox.yml` | Sonde HTTP du front nginx, qui n'expose pas de métriques |
+| `prometheus/prometheus.yml` | Une cible par service (`front`, `api`, `stats`) sur `/metrics`, trouvée par le DNS de Docker, plus la sonde du front |
+| `blackbox/blackbox.yml` | Sonde HTTP de la page du front, comme un navigateur |
 | `grafana/provisioning/` | Source de données et tableau de bord chargés au démarrage, sans clic |
 | `grafana/dashboards/flotte.json` | Les quatre panneaux, exportés et versionnés |
-| `compose.monitoring.yml` | Le bloc Prometheus + Grafana, à inclure depuis `compose.prod.yml` |
-| `test/` | Banc de test : une fausse flotte et un faux tableau, pour tout éprouver avant que les vrais services existent |
+| `compose.monitoring.yml` | Prometheus, Grafana et Blackbox, à inclure depuis `compose.prod.yml` |
+| `test/` | Banc de test : le vrai front, une base initialisée avec le schéma de l'équipe, un faux `api`, un faux `stats` et un faux tableau |
 
 ## Ce que chaque service doit faire
 
-### Le front (nginx statique)
+Les trois services de la flotte (`front`, `api`, `stats`) sont des serveurs Node.js. Chacun doit
+embarquer `lib/metrics.js` et `lib/pulse.js` : son image se construit donc **depuis la racine du
+dépôt**, comme `docker/frontend/Dockerfile` et `stats/Dockerfile`.
 
-Le front de l'équipe (`docker/frontend`) est un nginx qui sert `index.html` sur le port 80.
-Il n'expose ni `/metrics` ni pulse : la supervision le sonde de l'extérieur avec
-**blackbox_exporter**, comme un navigateur, exemplaire par exemplaire. On obtient s'il répond
-(`probe_success`) et en combien de temps (`probe_duration_seconds`), sans rien changer à son image.
+État au 28/10 : le front et stats sont branchés ; l'API d'Orokia n'expose pas encore `/metrics` ni
+pulse, sa cible Prometheus reste en échec tant que ce n'est pas fait.
 
-Ce que la sonde ne donne pas pour le front : le trafic reçu, la durée de `/travail`, la version
-et le pulse. Le carré du front au tableau de la classe dépend d'un pulse que nginx ne sait pas
-envoyer : c'est à régler côté images (par exemple un petit serveur Node), pas ici. Le jour où le
-front passe sous Node avec `metrics.js`, ajouter un job `front` comme celui de l'API.
-
-### L'API et le service de statistiques (Node.js)
-
-Dans chacun :
+Dans chacun (l'image copie `monitoring/lib/` dans `./lib/`) :
 
 ```js
-import { exposerMetriques, surveillerDependance } from "./metrics.js";
-import { demarrerLePulse } from "./pulse.js";
+import { exposerMetriques, surveillerDependance } from "./lib/metrics.js";
+import { demarrerLePulse } from "./lib/pulse.js";
 
 const app = express();
 exposerMetriques(app);            // avant les routes : compte et chronomètre chaque requête
@@ -64,8 +57,8 @@ Prometheus interroge. Si un service change de port, `prometheus/prometheus.yml` 
 | Panneau | Question | Métriques | Pannes qu'il nomme |
 | --- | --- | --- | --- |
 | 1 · Trafic | Le service reçoit-il des requêtes ? | `quiz_http_requetes_total` | 1 (courbe à plat) |
-| 2 · Réponse | Répond-il, et en combien de temps ? | `quiz_http_duree_secondes` (p95 de `/travail`), `up` (instances), `probe_success` et `probe_duration_seconds` (front) | 1, saturation |
-| 3 · Dépendances | Vont-elles bien ? | `quiz_dependance_ok`, `quiz_pulse_dernier_succes_timestamp_secondes`, `quiz_pavillon_lisible`, `up` et `probe_success` (« répond ») | 1, 2, 3, 4, 6 |
+| 2 · Réponse | Répond-il, et en combien de temps ? | `quiz_http_duree_secondes` (p95 de `/travail`), `up` (instances), `probe_duration_seconds` (page du front) | 1, saturation |
+| 3 · Dépendances | Vont-elles bien ? | `quiz_dependance_ok`, `quiz_pulse_dernier_succes_timestamp_secondes`, `quiz_pavillon_lisible`, `up` (« répond »), `probe_success` (« page servie ») | 1, 2, 3, 4, 6 |
 | 4 · Version | Celle qui tourne est-elle celle qu'on croit ? | `quiz_version_info` | 5 |
 
 Lecture du panneau 3 :
@@ -73,7 +66,8 @@ Lecture du panneau 3 :
 - base KO, tableau OK : panne 2 (base coupée) ou 4 (secret effacé) ;
 - base OK, tableau KO : panne 6, le service va bien mais ne joint plus le tableau de la classe ;
 - pavillon KO : panne 3 ;
-- « répond » KO : le process lui-même ne répond plus (panne 1, ou panne 5 si le conteneur n'a pas pu démarrer).
+- « répond » KO : le process lui-même ne répond plus (panne 1, ou panne 5 si le conteneur n'a pas pu démarrer) ;
+- front « répond » OK mais « page servie » KO : le process vit mais ne sert plus la page.
 
 ## Lancer la supervision
 
@@ -118,10 +112,15 @@ Arrêt : `docker compose -f compose.test.yml down` (ajouter `-v` pour effacer le
 - **La panne 3 ne se voit que si le service tourne en utilisateur non root** : root ignore le
   `chmod 000` et lit le pavillon quand même.
 - **Un conteneur tué avec `docker kill` ne redémarre pas**, même avec `restart: unless-stopped` :
-  Docker le considère comme arrêté à la main. Vérifié sur le banc avec le front : la sonde passe
-  à 0 et y reste jusqu'à un `docker start`. C'est ce que montrera la panne 1.
-- **Si Prometheus démarre alors que le front est déjà arrêté**, le nom `front` ne se résout pas et
-  la sonde n'a aucune cible : le panneau affiche « aucune donnée » au lieu de KO. Les deux
-  veulent dire que le front ne répond pas.
+  Docker le considère comme arrêté à la main. Vérifié sur le banc : il reste arrêté jusqu'à un
+  `docker start`. C'est ce que montrera la panne 1.
+- **La panne 3 survit au redéploiement** : le `chmod 000` modifie le volume `/data`, pas le
+  conteneur. Vérifié sur le banc : après `up -d --force-recreate`, `/data` était toujours en
+  `d---------`. Seul `chmod 755 /data` répare.
+- **Si Prometheus démarre alors qu'un service est déjà arrêté**, son nom ne se résout pas et il n'a
+  aucune cible : le panneau affiche « aucune donnée » au lieu de KO. Les deux veulent dire que le
+  service ne répond pas.
+- **La sonde du front est une vraie requête** toutes les 5 s : elle apparaît dans la courbe
+  « autres requêtes » du front (route `autre`).
 - **Le panneau pavillon affiche « aucune donnée »** tant qu'aucun pavillon n'a été hissé : le
   fichier n'existe pas encore, ce n'est pas une panne.
