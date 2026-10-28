@@ -55,3 +55,33 @@ jobs:
       - name: Vérifier la structure du quiz
         run: |
           node -e "const fs = require('fs'); const html = fs.readFileSync('index.html', 'utf8'); if (!html.includes('QuizBattle') || !html.includes('<html')) { process.exit(1); } console.log('Structure QuizBattle détectée');"
+       
+  # ==========================================================
+  # DEUXIÈME TÂCHE : CONSTRUIRE LES IMAGES DOCKER
+  # ==========================================================
+
+  build:
+
+    # Le build démarre uniquement si le job test a réussi.
+    needs: test
+
+    # GitHub fournit une machine Ubuntu.
+    runs-on: ubuntu-latest
+
+    steps:
+
+      # Récupérer les fichiers du projet.
+      - name: Récupérer le code source
+        uses: actions/checkout@v5
+
+      # Construire l'image Docker du frontend.
+      - name: Construire l'image frontend
+        run: docker build -t quizbattle-front:test ./docker/frontend
+
+      # Construire l'image Docker de l'API Node.js.
+      - name: Construire l'image API
+        run: docker build -t quizbattle-api:test ./api
+
+      # Afficher les images construites pour vérification.
+      - name: Afficher les images Docker
+        run: docker images       
