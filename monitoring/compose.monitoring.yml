@@ -1,42 +1,58 @@
+# compose.monitoring.yml : le bloc de la supervision, tenu par la mesure.
+# Inclus depuis compose.prod.yml par une seule ligne, pour ne jamais toucher
+# aux blocs des autres :
+#
+#   include:
+#     - monitoring/compose.monitoring.yml
+#
+# Les chemins ci-dessous sont relatifs à ce dossier monitoring/.
+# Ports publiés sur la machine cible depuis J3 : 9090 Prometheus, 3001 Grafana.
+# Sur un poste où ils sont déjà pris, les changer dans le .env local, sans
+# toucher à ce fichier : PORT_PROMETHEUS=9092 et PORT_GRAFANA=3004 par exemple.
 services:
   prometheus:
     image: prom/prometheus:v2.53.0
+    restart: unless-stopped
     command:
       - --config.file=/etc/prometheus/prometheus.yml
       - --storage.tsdb.retention.time=2d
-    ports:
-      - "9092:9090"
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - mesures:/prometheus
+    ports:
+      - "${PORT_PROMETHEUS:-9090}:9090"
     depends_on:
       - blackbox
-    restart: unless-stopped
 
+  # Sonde la page du front de l'extérieur, comme un navigateur.
+  # Pas de port publié : seul Prometheus l'interroge, sur le réseau interne.
   blackbox:
     image: prom/blackbox-exporter:v0.25.0
+    restart: unless-stopped
     command:
       - --config.file=/etc/blackbox/blackbox.yml
     volumes:
       - ./blackbox/blackbox.yml:/etc/blackbox/blackbox.yml:ro
-    restart: unless-stopped
 
   grafana:
     image: grafana/grafana:11.1.0
-    ports:
-      - "3004:3000"
+    restart: unless-stopped
     environment:
+      # Le mot de passe admin vient du .env de la machine cible, jamais du repo
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_MOT_DE_PASSE:?GRAFANA_MOT_DE_PASSE manquant dans le .env}
+      # La classe peut regarder le tableau de bord sans compte, sans rien modifier
       GF_AUTH_ANONYMOUS_ENABLED: "true"
       GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
       GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/flotte.json
     volumes:
+      # Sans ce volume, Grafana refait plusieurs minutes de migrations à chaque redéploiement
       - grafana:/var/lib/grafana
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
       - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      - "${PORT_GRAFANA:-3001}:3000"
     depends_on:
       - prometheus
-    restart: unless-stopped
 
 volumes:
   mesures:

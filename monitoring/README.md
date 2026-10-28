@@ -80,6 +80,10 @@ include:
 
 Le `.env` de la machine cible doit contenir `GRAFANA_MOT_DE_PASSE` (jamais dans le repo).
 
+Les ports publiés valent **9090** (Prometheus) et **3001** (Grafana), ceux que la machine cible
+expose. Sur un poste où ils sont déjà pris, les changer dans le `.env` local, sans modifier le
+fichier compose : `PORT_PROMETHEUS=9092` et `PORT_GRAFANA=3004` par exemple.
+
 - Prometheus : http://localhost:9090 (page **Status → Targets** pour voir les cibles)
 - Grafana : http://localhost:3001 (lecture sans compte, tableau « Flotte du quiz »)
 
