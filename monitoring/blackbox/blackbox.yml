@@ -1,0 +1,8 @@
+# blackbox.yml : comment sonder un service qui n'expose pas ses propres métriques.
+# http_2xx : une requête GET, réussie si la réponse est un 2xx en moins de 3 s.
+modules:
+  http_2xx:
+    prober: http
+    timeout: 3s
+    http:
+      preferred_ip_protocol: ip4
