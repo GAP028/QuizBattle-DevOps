@@ -1,0 +1,9 @@
+# Charge tous les tableaux de bord JSON du dossier monté sur /var/lib/grafana/dashboards.
+apiVersion: 1
+providers:
+  - name: flotte
+    type: file
+    disableDeletion: true
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards
