@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>QuizBattle</title>
+
+    <style>
+        /* Apparence générale de la page */
+        body {
+            font-family: Arial, sans-serif;
+            background: #101827;
+            color: white;
+            text-align: center;
+            padding: 40px 20px;
+        }
+
+        /* Carte contenant le quiz */
+        .quiz {
+            background: #1e293b;
+            max-width: 550px;
+            margin: auto;
+            padding: 30px;
+            border-radius: 15px;
+        }
+
+        /* Boutons de réponse */
+        button {
+            display: block;
+            width: 100%;
+            padding: 15px;
+            margin: 10px 0;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            background: #e2e8f0;
+        }
+
+        button:hover {
+            background: #93c5fd;
+        }
+
+        /* Affichage du score */
+        .score {
+            color: #4ade80;
+            font-size: 20px;
+        }
+
+        /* Chronomètre */
+        .chrono {
+            color: #fbbf24;
+            font-size: 20px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <h1>⚡ QuizBattle</h1>
+    <p>Affrontez vos camarades dans un quiz informatique !</p>
+
+    <div class="quiz">
+
+        <!-- Chronomètre -->
+        <p class="chrono">
+            Temps restant : <span id="temps">15</span>s
+        </p>
+
+        <!-- Score actuel -->
+        <p class="score">
+            Score : <span id="score">0</span>
+        </p>
+
+        <!-- Question -->
+        <h2 id="question"></h2>
+
+        <!-- Réponses générées par JavaScript -->
+        <div id="reponses"></div>
+
+        <!-- Message après une réponse -->
+        <p id="message"></p>
+
+    </div>
+
+    <script>
+        // Liste des questions du quiz
+        const questions = [
+            {
+                question: "Que signifie HTML ?",
+                reponses: [
+                    "HyperText Markup Language",
+                    "HighText Machine Language",
+                    "HyperTool Main Language",
+                    "HomeText Markup Language"
+                ],
+                correcte: 0
+            },
+            {
+                question: "À quoi sert Docker ?",
+                reponses: [
+                    "Créer des vidéos",
+                    "Exécuter des applications dans des conteneurs",
+                    "Modifier des images",
+                    "Envoyer des emails"
+                ],
+                correcte: 1
+            },
+            {
+                question: "Que signifie CI/CD ?",
+                reponses: [
+                    "Code Internet / Code Docker",
+                    "Continuous Integration / Continuous Delivery",
+                    "Computer Installation / Computer Development",
+                    "Cloud Integration / Cloud Database"
+                ],
+                correcte: 1
+            }
+        ];
+
+        // Variables permettant de suivre la partie
+        let indexQuestion = 0;
+        let score = 0;
+        let temps = 15;
+        let intervalle;
+
+        // Afficher une question et ses réponses
+        function afficherQuestion() {
+
+            // Si toutes les questions sont terminées
+            if (indexQuestion >= questions.length) {
+                terminerQuiz();
+                return;
+            }
+
+            const questionActuelle = questions[indexQuestion];
+
+            document.getElementById("question").textContent =
+                questionActuelle.question;
+
+            document.getElementById("reponses").innerHTML = "";
+            document.getElementById("message").textContent = "";
+
+            // Créer un bouton pour chaque réponse
+            questionActuelle.reponses.forEach((reponse, index) => {
+
+                const bouton = document.createElement("button");
+
+                bouton.textContent = reponse;
+
+                bouton.onclick = () => verifierReponse(index);
+
+                document.getElementById("reponses").appendChild(bouton);
+            });
+
+            // Réinitialiser le chronomètre
+            temps = 15;
+            document.getElementById("temps").textContent = temps;
+
+            clearInterval(intervalle);
+
+            // Diminuer le temps chaque seconde
+            intervalle = setInterval(() => {
+
+                temps--;
+
+                document.getElementById("temps").textContent = temps;
+
+                // Passer à la question suivante à zéro
+                if (temps <= 0) {
+                    clearInterval(intervalle);
+                    indexQuestion++;
+                    afficherQuestion();
+                }
+
+            }, 1000);
+        }
+
+        // Vérifier la réponse sélectionnée
+        function verifierReponse(index) {
+
+            clearInterval(intervalle);
+
+            const questionActuelle = questions[indexQuestion];
+
+            // Bonne réponse : ajouter un point
+            if (index === questionActuelle.correcte) {
+
+                score++;
+
+                document.getElementById("score").textContent = score;
+
+            }
+
+            // Passer à la question suivante
+            indexQuestion++;
+            afficherQuestion();
+        }
+
+        // Afficher le résultat final
+        function terminerQuiz() {
+
+            clearInterval(intervalle);
+
+            document.getElementById("question").textContent =
+                "Quiz terminé !";
+
+            document.getElementById("reponses").innerHTML = "";
+
+            document.getElementById("message").textContent =
+                "Votre score final : " + score + "/" + questions.length;
+
+            document.getElementById("temps").textContent = "0";
+
+            // Bouton pour recommencer une partie
+            const bouton = document.createElement("button");
+
+            bouton.textContent = "Recommencer";
+
+            bouton.onclick = () => {
+                indexQuestion = 0;
+                score = 0;
+
+                document.getElementById("score").textContent = score;
+
+                afficherQuestion();
+            };
+
+            document.getElementById("reponses").appendChild(bouton);
+        }
+
+        // Démarrer automatiquement le quiz
+        afficherQuestion();
+    </script>
+
+</body>
+</html>
