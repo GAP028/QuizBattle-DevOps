@@ -88,78 +88,74 @@
         // Adresse de l'API (modifiable avant ce script via window.QUIZBATTLE_API_URL)
         const API_URL = window.QUIZBATTLE_API_URL || "http://localhost:3002";
 
-        // Questions de secours, utilisées si l'API ne répond pas
-        const questionsLocales = [
-            {
-                question: "Que signifie HTML ?",
-                reponses: [
-                    "HyperText Markup Language",
-                    "HighText Machine Language",
-                    "HyperTool Main Language",
-                    "HomeText Markup Language"
-                ],
-                correcte: 0
-            },
-            {
-                question: "À quoi sert Docker ?",
-                reponses: [
-                    "Créer des vidéos",
-                    "Exécuter des applications dans des conteneurs",
-                    "Modifier des images",
-                    "Envoyer des emails"
-                ],
-                correcte: 1
-            },
-            {
-                question: "Que signifie CI/CD ?",
-                reponses: [
-                    "Code Internet / Code Docker",
-                    "Continuous Integration / Continuous Delivery",
-                    "Computer Installation / Computer Development",
-                    "Cloud Integration / Cloud Database"
-                ],
-                correcte: 1
-            }
-        ];
-
-        // Questions de la partie : remplacées par celles de PostgreSQL si l'API répond
-        let questions = questionsLocales;
+        // Questions de la partie, chargées uniquement depuis l'API (PostgreSQL)
+        let questions = [];
 
         // Charger les questions depuis l'API
         // Quiz choisi : paramètre ?quiz=ID, sinon le premier quiz qui contient des questions
         async function chargerQuestions() {
-            try {
-                const options = { signal: AbortSignal.timeout(3000) };
-                let quizId = new URLSearchParams(window.location.search).get("quiz");
+            const options = { signal: AbortSignal.timeout(3000) };
+            let quizId = new URLSearchParams(window.location.search).get("quiz");
 
-                if (!quizId) {
-                    const reponseQuiz = await fetch(API_URL + "/api/quiz", options);
-                    if (!reponseQuiz.ok) throw new Error("HTTP " + reponseQuiz.status);
+            if (!quizId) {
+                const reponseQuiz = await fetch(API_URL + "/api/quiz", options);
+                if (!reponseQuiz.ok) throw new Error("HTTP " + reponseQuiz.status);
 
-                    const listeQuiz = await reponseQuiz.json();
-                    const quiz = listeQuiz.find((q) => q.nb_questions > 0);
-                    if (!quiz) throw new Error("aucun quiz avec des questions");
+                const listeQuiz = await reponseQuiz.json();
+                const quiz = listeQuiz.find((q) => q.nb_questions > 0);
+                if (!quiz) throw new Error("aucun quiz avec des questions");
 
-                    quizId = quiz.id;
-                }
-
-                const reponse = await fetch(API_URL + "/api/quiz/" + quizId + "/questions", options);
-                if (!reponse.ok) throw new Error("HTTP " + reponse.status);
-
-                const donnees = await reponse.json();
-                if (donnees.length === 0) throw new Error("quiz sans questions");
-
-                // Adapter le format de l'API au format utilisé par le quiz
-                questions = donnees.map((q) => ({
-                    question: q.enonce,
-                    reponses: q.options.map((option) => option.libelle),
-                    correcte: q.correcte,
-                    duree: q.duree_secondes
-                }));
-            } catch (erreur) {
-                console.warn("Questions de l'API non chargées, questions locales utilisées :", erreur.message);
-                questions = questionsLocales;
+                quizId = quiz.id;
             }
+
+            const reponse = await fetch(API_URL + "/api/quiz/" + quizId + "/questions", options);
+            if (!reponse.ok) throw new Error("HTTP " + reponse.status);
+
+            const donnees = await reponse.json();
+            if (donnees.length === 0) throw new Error("quiz sans questions");
+
+            // Adapter le format de l'API au format utilisé par le quiz
+            questions = donnees.map((q) => ({
+                question: q.enonce,
+                reponses: q.options.map((option) => option.libelle),
+                correcte: q.correcte,
+                duree: q.duree_secondes
+            }));
+        }
+
+        // Charger le quiz puis lancer la partie, ou afficher l'erreur
+        function demarrer() {
+            document.getElementById("question").textContent = "Chargement du quiz...";
+            document.getElementById("reponses").innerHTML = "";
+            document.getElementById("message").textContent = "";
+
+            chargerQuestions()
+                .then(() => {
+                    indexQuestion = 0;
+                    score = 0;
+                    document.getElementById("score").textContent = score;
+                    afficherQuestion();
+                })
+                .catch(afficherErreur);
+        }
+
+        // Pas de questions de secours : on indique le problème et on propose de réessayer
+        function afficherErreur(erreur) {
+            console.error("Questions de l'API non chargées :", erreur.message);
+
+            document.getElementById("question").textContent =
+                "Impossible de charger le quiz";
+
+            document.getElementById("message").textContent =
+                "Vérifiez que l'API est démarrée sur " + API_URL + " (" + erreur.message + ")";
+
+            const bouton = document.createElement("button");
+
+            bouton.textContent = "Réessayer";
+
+            bouton.onclick = demarrer;
+
+            document.getElementById("reponses").appendChild(bouton);
         }
 
         // Variables permettant de suivre la partie
@@ -274,8 +270,7 @@
         }
 
         // Démarrer automatiquement le quiz une fois les questions chargées
-        document.getElementById("question").textContent = "Chargement du quiz...";
-        chargerQuestions().then(afficherQuestion);
+        demarrer();
     </script>
 
 </body>
