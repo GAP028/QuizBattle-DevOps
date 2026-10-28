@@ -1,0 +1,34 @@
+# prometheus.yml : une cible par service de la flotte.
+# Les cibles sont trouvées par le DNS interne de Docker, pas écrites en dur :
+# avec --scale api=3, le nom "api" répond avec trois adresses, et Prometheus
+# voit trois exemplaires. C'est ce qui permet de compter ceux qui répondent.
+global:
+  scrape_interval: 5s      # le carré s'éteint en 8 s, la mesure doit suivre
+  scrape_timeout: 4s
+  evaluation_interval: 5s
+
+scrape_configs:
+  - job_name: front
+    dns_sd_configs:
+      - names: [front]
+        type: A
+        port: 3000
+        refresh_interval: 5s
+
+  - job_name: api
+    dns_sd_configs:
+      - names: [api]
+        type: A
+        port: 3000
+        refresh_interval: 5s
+
+  - job_name: stats
+    dns_sd_configs:
+      - names: [stats]
+        type: A
+        port: 3000
+        refresh_interval: 5s
+
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]

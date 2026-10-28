@@ -1,0 +1,12 @@
+# Branchée au démarrage de Grafana : aucun clic à refaire après un redéploiement.
+# L'uid fixe est celui que référence le tableau de bord exporté.
+apiVersion: 1
+datasources:
+  - name: Prometheus
+    uid: prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    jsonData:
+      timeInterval: 5s

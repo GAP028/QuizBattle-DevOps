@@ -1,0 +1,62 @@
+# compose.test.yml : la supervision branchée sur une fausse flotte, en local.
+# Lancement, depuis monitoring/test :
+#   GRAFANA_MOT_DE_PASSE=admin docker compose -f compose.test.yml up -d --build
+# Grafana sur http://localhost:3001, Prometheus sur http://localhost:9090.
+include:
+  - ../compose.monitoring.yml
+
+x-service: &service
+  build:
+    context: ..
+    dockerfile: test/Dockerfile
+  image: banc-supervision:local
+  restart: unless-stopped
+
+services:
+  front:
+    <<: *service
+    environment:
+      SERVICE: front
+      GROUPE: banc-de-test
+      VERSION: ${TAG:-local}
+      TABLEAU_URL: ${TABLEAU_URL:-http://faux-tableau:3000}
+      URL_INTERNE: http://front:3000
+
+  api:
+    <<: *service
+    environment:
+      SERVICE: api
+      GROUPE: banc-de-test
+      VERSION: ${TAG:-local}
+      TABLEAU_URL: ${TABLEAU_URL:-http://faux-tableau:3000}
+      URL_INTERNE: http://api:3000
+      DATABASE_URL: postgres://postgres:${DB_PASSWORD:-test}@db:5432/postgres
+    volumes:
+      - pavillon:/data
+    depends_on:
+      - db
+
+  stats:
+    <<: *service
+    environment:
+      SERVICE: stats
+      GROUPE: banc-de-test
+      VERSION: ${TAG:-local}
+      TABLEAU_URL: ${TABLEAU_URL:-http://faux-tableau:3000}
+      URL_INTERNE: http://stats:3000
+
+  faux-tableau:
+    <<: *service
+    environment:
+      FAUX_TABLEAU: "1"
+    ports:
+      - "8088:3000"
+
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD: test
+
+volumes:
+  pavillon:
