@@ -69,7 +69,7 @@ jobs:
 
       # Construire l'image Docker de l'API
       - name: Construire l'image API
-        run: docker build -t quizbattle-api:test ./api
+        run: docker build -f api/Dockerfile -t quizbattle-api:test .
 
       # Vérifier les images construites
       - name: Afficher les images Docker
