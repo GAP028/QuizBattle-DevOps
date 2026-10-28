@@ -13,14 +13,13 @@ x-service: &service
   restart: unless-stopped
 
 services:
+  # Le vrai front de l'équipe (nginx statique, docker/frontend), pas un faux :
+  # c'est lui que la sonde blackbox doit savoir mesurer.
   front:
-    <<: *service
-    environment:
-      SERVICE: front
-      GROUPE: banc-de-test
-      VERSION: ${TAG:-local}
-      TABLEAU_URL: ${TABLEAU_URL:-http://faux-tableau:3000}
-      URL_INTERNE: http://front:3000
+    build:
+      context: ../../docker/frontend
+    image: banc-front:local
+    restart: unless-stopped
 
   api:
     <<: *service
