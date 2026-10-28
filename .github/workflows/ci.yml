@@ -3,55 +3,40 @@
 # Responsable : Alain-Patrick Gomas
 # ==========================================================
 
-# Nom affiché dans GitHub Actions
 name: QuizBattle CI
 
-# Événements déclenchant automatiquement le workflow
 on:
-
-  # Lorsqu'un développeur envoie du code sur GitHub
   push:
-
-  # Lorsqu'une Pull Request vise la branche main
   pull_request:
     branches:
       - main
 
-# Permissions minimales du workflow
 permissions:
   contents: read
 
-# Liste des tâches à exécuter
 jobs:
-
-  # PREMIÈRE TÂCHE : VÉRIFICATION DE L'APPLICATION
   test:
-
-    # GitHub fournit temporairement une machine Ubuntu
     runs-on: ubuntu-latest
 
     steps:
-
-      # ÉTAPE 1 : RÉCUPÉRER LE PROJET
-      # Sans cette action, la machine ne possède pas notre code
       - name: Récupérer le code source
         uses: actions/checkout@v5
 
-      # ÉTAPE 2 : INSTALLER NODE.JS
-      # Node.js servira à exécuter notre vérification
       - name: Installer Node.js
         uses: actions/setup-node@v5
         with:
           node-version: '22'
 
-      # ÉTAPE 3 : VÉRIFIER QUE LE FRONT-END EXISTE
-      # La pipeline échoue si index.html est absent
       - name: Vérifier le fichier HTML
-        run: |
-          test -f index.html
+        run: test -f index.html
 
-      # ÉTAPE 4 : VÉRIFIER LE CONTENU MINIMAL DU QUIZ
-      # Le script vérifie que le fichier contient notre application
       - name: Vérifier la structure du quiz
         run: |
           node -e "const fs = require('fs'); const html = fs.readFileSync('index.html', 'utf8'); if (!html.includes('QuizBattle') || !html.includes('<html')) { process.exit(1); } console.log('Structure QuizBattle détectée');"
+
+      - name: Installer les dépendances de l'API
+        working-directory: api
+        run: npm ci
+
+      - name: Construire l'image Docker de l'API
+        run: docker build -t quizbattle-api:test ./api

@@ -20,8 +20,8 @@ services:
 
   api:
     build:
-      context: .
-      dockerfile: api/Dockerfile
+      context: ./api
+      dockerfile: Dockerfile
     image: quizbattle-api:${TAG:-latest}
     restart: unless-stopped
     environment:
