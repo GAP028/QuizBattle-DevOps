@@ -1,96 +1,104 @@
 # ==========================================================
-# QUIZBATTLE - INTÉGRATION CONTINUE (CI)
+# QUIZBATTLE - PIPELINE CI/CD
 # Responsable : Alain-Patrick Gomas
 # ==========================================================
 
-# Nom du workflow affiché sur GitHub Actions
-name: QuizBattle CI
+name: QuizBattle CI/CD
 
-# Événements qui déclenchent automatiquement le pipeline
+# Déclenchement automatique du pipeline
 on:
-
-  # Lorsqu'un développeur envoie du code sur GitHub
   push:
-
-  # Lorsqu'une Pull Request cible la branche principale
   pull_request:
     branches:
       - main
 
-# Autorisation minimale : lire le contenu du dépôt
+# Permissions minimales
 permissions:
   contents: read
 
-# ==========================================================
-# LISTE DES TÂCHES DU PIPELINE
-# ==========================================================
 jobs:
 
   # ========================================================
-  # TÂCHE 1 : VÉRIFIER L'APPLICATION
+  # TÂCHE 1 : TESTER L'APPLICATION
   # ========================================================
   test:
-
-    # GitHub fournit temporairement une machine Ubuntu
     runs-on: ubuntu-latest
 
     steps:
 
-      # Étape 1 : récupérer le code source du projet
+      # Récupérer le code source
       - name: Récupérer le code source
         uses: actions/checkout@v5
 
-      # Étape 2 : installer Node.js 22
+      # Installer Node.js 22
       - name: Installer Node.js
         uses: actions/setup-node@v5
         with:
           node-version: '22'
 
-      # Étape 3 : vérifier que le fichier HTML existe
+      # Vérifier la présence du frontend
       - name: Vérifier le fichier HTML
         run: |
           test -f index.html
 
-      # Étape 4 : vérifier la structure minimale du quiz
+      # Vérifier la structure minimale de QuizBattle
       - name: Vérifier la structure du quiz
         run: |
           node -e "const fs = require('fs'); const html = fs.readFileSync('index.html', 'utf8'); if (!html.includes('QuizBattle') || !html.includes('<html')) { process.exit(1); } console.log('Structure QuizBattle détectée');"
 
   # ========================================================
-  # TÂCHE 2 : CONSTRUIRE LES IMAGES DOCKER
+  # TÂCHE 2 : CONSTRUIRE ET PUBLIER LES IMAGES DOCKER
   # ========================================================
   build:
-
-    # La construction ne démarre que si les tests réussissent
+    # La construction démarre uniquement si les tests réussissent
     needs: test
 
-    # Exécution sur une machine Ubuntu fournie par GitHub
     runs-on: ubuntu-latest
 
     steps:
 
-      # Étape 1 : récupérer le code source
+      # Récupérer le code source
       - name: Récupérer le code source
         uses: actions/checkout@v5
 
-      # Étape 2 : construire l'image Docker du frontend
-      #
-      # -t : donne un nom et une version à l'image
-      # -f : indique l'emplacement du Dockerfile
-      # .  : définit la racine du projet comme contexte
-      #
-      # Le contexte racine permet aussi de copier monitoring/lib/
+      # Construire l'image Docker du frontend
+      # -f indique l'emplacement du Dockerfile
+      # Le point final utilise la racine du projet comme contexte
       - name: Construire l'image frontend
         run: docker build -t quizbattle-front:test -f docker/frontend/Dockerfile .
 
-      # Étape 3 : construire l'image Docker de l'API Node.js
-      #
-      # Le Dockerfile de l'API est dans le dossier api/
+      # Construire l'image Docker de l'API
       - name: Construire l'image API
         run: docker build -t quizbattle-api:test ./api
 
-      # Étape 4 : afficher les images construites
-      #
-      # Permet de vérifier leur présence dans les logs GitHub
+      # Vérifier les images construites
       - name: Afficher les images Docker
         run: docker images
+
+      # ====================================================
+      # PUBLICATION AUTOMATIQUE SUR DOCKER HUB
+      # ====================================================
+
+      # Connexion uniquement après un push sur main
+      # Les Pull Requests ne publient aucune image
+      - name: Connexion à Docker Hub
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # Attribuer une version unique aux images
+      # github.sha représente l'identifiant du commit
+      - name: Versionner les images Docker
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          docker tag quizbattle-front:test gomaso/quizbattle-front:${{ github.sha }}
+          docker tag quizbattle-api:test gomaso/quizbattle-api:${{ github.sha }}
+
+      # Publier les images sur Docker Hub
+      - name: Publier les images Docker
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          docker push gomaso/quizbattle-front:${{ github.sha }}
+          docker push gomaso/quizbattle-api:${{ github.sha }}
